@@ -86,15 +86,15 @@ class _MyHomePageState extends State<MyHomePage> {
                     '${currentItem.prettyProgress >= 0 ? '...${currentItem.prettyProgress}%' : ''}'),
                 subtitle: Text(currentItem.downloadState.toString()),
                 trailing: IconButton(
-                  icon: Icon(currentItem.isRunning
+                  icon: Icon(currentItem.downloadState.isRunning
                       ? Icons.pause
-                      : currentItem.isCompleted
+                      : currentItem.downloadState.isCompleted
                           ? Icons.download_done_outlined
                           : Icons.play_arrow_rounded),
                   onPressed: () {
-                    if (currentItem.isRunning) {
+                    if (currentItem.downloadState.isRunning) {
                       downloadMan.pause(currentItem.downloadId);
-                    } else if (currentItem.isResumable) {
+                    } else if (currentItem.downloadState.isResumable) {
                       _add(currentItem.downloadId);
                     }
                   },

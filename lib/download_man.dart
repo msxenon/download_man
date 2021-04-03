@@ -75,6 +75,7 @@ class DownloadMan extends GetxService {
 
   void pauseAll() {
     _currentOperation?.cancel();
+    // ignore: avoid_function_literals_in_foreach_calls
     waitingList.keys.forEach((element) {
       _streamListener.add(DownloadDTO(
         downloadId: element,

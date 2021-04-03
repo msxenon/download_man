@@ -16,15 +16,16 @@ abstract class DownloadDTO with _$DownloadDTO {
       @required int chunksCount,
       @required DownloadState downloadState,
       Map<String, dynamic> customObject}) = _DownloadDTO;
+}
 
+extension DownloadStateExts on DownloadState {
   bool get isRunning =>
-      downloadState == DownloadState.downloading ||
-      downloadState == DownloadState.queued;
+      this == DownloadState.downloading || this == DownloadState.queued;
 
-  bool get isCompleted => downloadState == DownloadState.completed;
+  bool get isCompleted => this == DownloadState.completed;
 
   bool get isResumable =>
-      downloadState != DownloadState.queued &&
-      downloadState != DownloadState.downloading &&
-      downloadState != DownloadState.completed;
+      this != DownloadState.queued &&
+      this != DownloadState.downloading &&
+      this != DownloadState.completed;
 }
