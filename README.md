@@ -6,19 +6,29 @@ a small downloader using Dio range download with DownloadMan Service which contr
 # Features
 
 1.Resumable downloads
+
 2.fast download while it splits the file into small chunks and downloads them in parallel
+
 3.easy to implement
+
 4.parallel files download (Not yet implemented)
+
 5.background fetch(Not yet implemented)
 
 # Workflow
+
 1. download a small chunk (1 byte) to check the file size
+
 2. split files more than 10 Mb to chunks (FileSize/10Mb) with max of 16 chunk
+
 3. resumes the chunk if its already been (fully/partially) downloaded before
+
 4. emits progress updates (DownloadMan.streamController) =>
 (String downloadId, int prettyProgress,  int total,int count, int chunksCount,DownloadState downloadState)
 
-enum DownloadState { unknown, queued, downloading, failed, completed, paused }
+# DownloadState 
+
+enum { unknown, queued, downloading, failed, completed, paused }
 
 # How to use
 
