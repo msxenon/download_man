@@ -21,10 +21,15 @@ a small downloader using Dio range download with DownloadMan Service which contr
 enum DownloadState { unknown, queued, downloading, failed, completed, paused }
 
 # How to use
-1.inistaniate DownloadMan Service final downloadMan = Get.put(DownloadMan());
-2.create needed directories => final finalDir = await _createDir();
-3.add a new download request => downloadMan.addToDownload('downloadId',url,finalDir+'/filename.ext')
-4.listen to the updates downloadMan.streamController.stream.listen((event) {...});
+
+1.inistaniate DownloadMan Service final downloadMan = Get.put(DownloadMan());.
+
+2.create needed directories => final finalDir = await _createDir();.
+
+3.add a new download request => downloadMan.addToDownload('downloadId',url,finalDir+'/filename.ext');.
+
+4.listen to the updates downloadMan.streamController.stream.listen((event) {...});.
+
 # Hints
 *For Best UI Results add the Events(destination file and downloadId ... etc) to your real-time database, ObjectBox for example))
 PS. if you download the file inside the app sandbox then you don't need storage permission.
