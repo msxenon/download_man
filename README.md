@@ -11,9 +11,11 @@ a small downloader using Dio range download with DownloadMan Service which contr
 
 3.easy to implement
 
-4.parallel files download (Not yet implemented)
+4.Queue Downloads
 
-5.background fetch(Not yet implemented)
+5.parallel files download (Not yet implemented)
+
+6.background fetch(Not yet implemented)
 
 # Workflow
 
@@ -26,7 +28,7 @@ a small downloader using Dio range download with DownloadMan Service which contr
 4. emits progress updates (DownloadMan.streamController) =>
 (String downloadId, int prettyProgress,  int total,int count, int chunksCount,DownloadState downloadState)
 
-# DownloadState 
+# DownloadState
 
 enum { unknown, queued, downloading, failed, completed, paused }
 
