@@ -19,7 +19,7 @@ a small downloader using Dio range download with DownloadMan Service which contr
 
 # Workflow
 
-1. download a small chunk (1 byte) to check the file size
+1. download a small chunk (1 byte) to check the total file size
 
 2. split files more than 10 Mb to chunks (FileSize/10Mb) with max of 16 chunk
 
