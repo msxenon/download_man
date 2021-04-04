@@ -106,12 +106,7 @@ class DownloadMan extends GetxService {
       _currentDownloadId = downloadId;
       _currentOperation =
           CancelableOperation.fromFuture(value.call(), onCancel: () async {
-        _currentDownloadId = null;
-        _currentOperation = null;
-        _cancelTokens[downloadId].cancel();
-        _cancelTokens.remove(downloadId);
-        _logger?.d('download cancelled id = $downloadId');
-        await Future.delayed(const Duration(milliseconds: 500));
+        await _refresh(downloadId);
         _streamListener.add(DownloadDTO(
           downloadId: downloadId,
           downloadState: DownloadState.paused,
@@ -120,14 +115,34 @@ class DownloadMan extends GetxService {
           chunksCount: 0,
           count: 0,
         ));
+        _checkQueue();
       });
-      _currentOperation.value.then((value) {
-        _logger?.d('download cancelled id = $downloadId  $value == '
-            '${_currentOperation.isCompleted} '
-            '${_currentOperation.isCanceled}');
+      _currentOperation.value.then((value) async {
+        _logger?.d('download value id = $downloadId  $value == '
+            'isCompleted ${_currentOperation.isCompleted} '
+            'isCancelled ${_currentOperation.isCanceled}');
+        if (_currentOperation.isCompleted) {
+          await _refresh(downloadId);
+          _checkQueue();
+        }
       }, onError: (error, stack) {
         _logger?.e('download cancelled id = $downloadId', error, stack);
       });
     }
+  }
+
+  Future<void> _refresh(String downloadId) async {
+    _currentDownloadId = null;
+    _currentOperation = null;
+    final cancel = _cancelTokens[downloadId];
+    if (cancel?.isCancelled == false) {
+      cancel.cancel();
+    }
+    if (cancel != null) {
+      _cancelTokens.remove(downloadId);
+    }
+    _logger?.d('download cancelled id = $downloadId');
+    await Future.delayed(const Duration(milliseconds: 500));
+    return;
   }
 }

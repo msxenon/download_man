@@ -21,7 +21,8 @@ abstract class DownloadDTO with _$DownloadDTO {
 extension DownloadStateExts on DownloadState {
   bool get isRunning =>
       this == DownloadState.downloading || this == DownloadState.queued;
-
+  bool get isDownloading => this == DownloadState.downloading;
+  bool get isQueued => this == DownloadState.queued;
   bool get isCompleted => this == DownloadState.completed;
 
   bool get isResumable =>
