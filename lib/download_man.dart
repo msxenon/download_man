@@ -89,12 +89,16 @@ class DownloadMan extends GetxService {
     _cancelTokens.clear();
   }
 
-  void pause(String downloadId) {
+  bool pause(String downloadId) {
+    bool result = false;
     if (waitingList.containsKey(downloadId)) {
       waitingList.remove(downloadId);
+      result = true;
     } else if (_currentDownloadId == downloadId) {
       _currentOperation?.cancel();
+      result = true;
     }
+    return result;
   }
 
   void _checkQueue() {
