@@ -14,7 +14,10 @@ class DownloadMan extends GetxService {
     if (isLogEnabled) {
       _logger = Logger();
     }
-    _streamListener.distinct((d1, d2) => d1 == d2).listen((rawData) async {
+    _streamListener
+        .throttleTime(const Duration(milliseconds: 500),
+            leading: false, trailing: true)
+        .listen((rawData) async {
       streamController.add(rawData);
     });
   }
@@ -32,10 +35,10 @@ class DownloadMan extends GetxService {
     _streamListener.add(DownloadDTO(
       downloadId: downloadId,
       downloadState: DownloadState.queued,
-      total: -1,
-      prettyProgress: -1,
-      chunksCount: 0,
-      count: 0,
+      total: DownloadDTO.unknown,
+      prettyProgress: DownloadDTO.unknown,
+      chunksCount: DownloadDTO.unknown,
+      count: DownloadDTO.unknown,
     ));
     waitingList.putIfAbsent(
         downloadId, () => () => downloadFuture(downloadId, url, savePath));
@@ -49,13 +52,12 @@ class DownloadMan extends GetxService {
         _cancelTokens.putIfAbsent(downloadId, () => _dio.CancelToken());
     return RangeDownload(downloadId).downloadWithChunks(url, savePath,
         cancelToken: _cancelToken, dio: dio, onReceiveProgress:
-            (downloadId, count, total, chinksCount, downloadState) {
-      final int prettyProgress = (count / total * 100).floor();
+            (downloadId, count, total, progress, chinksCount, downloadState) {
       _streamListener.add(DownloadDTO(
           downloadId: downloadId,
           downloadState: downloadState,
           total: total,
-          prettyProgress: prettyProgress,
+          prettyProgress: progress,
           chunksCount: chinksCount,
           count: count));
     });
@@ -80,10 +82,10 @@ class DownloadMan extends GetxService {
       _streamListener.add(DownloadDTO(
         downloadId: element,
         downloadState: DownloadState.paused,
-        total: -1,
-        prettyProgress: -1,
-        chunksCount: 0,
-        count: 0,
+        total: DownloadDTO.unknown,
+        prettyProgress: DownloadDTO.unknown,
+        chunksCount: DownloadDTO.unknown,
+        count: DownloadDTO.unknown,
       ));
     });
     _cancelTokens.clear();
@@ -110,14 +112,16 @@ class DownloadMan extends GetxService {
       _currentDownloadId = downloadId;
       _currentOperation =
           CancelableOperation.fromFuture(value.call(), onCancel: () async {
+        _logger?.e('download cancelled #1 id = $downloadId');
+
         await _refresh(downloadId);
         _streamListener.add(DownloadDTO(
           downloadId: downloadId,
           downloadState: DownloadState.paused,
-          total: -1,
-          prettyProgress: -1,
-          chunksCount: 0,
-          count: 0,
+          total: DownloadDTO.unknown,
+          prettyProgress: DownloadDTO.unknown,
+          chunksCount: DownloadDTO.unknown,
+          count: DownloadDTO.unknown,
         ));
         _checkQueue();
       });
@@ -129,8 +133,18 @@ class DownloadMan extends GetxService {
           await _refresh(downloadId);
           _checkQueue();
         }
-      }, onError: (error, stack) {
+      }, onError: (error, stack) async {
         _logger?.e('download cancelled id = $downloadId', error, stack);
+        await _refresh(downloadId);
+
+        _streamListener.add(DownloadDTO(
+          downloadId: downloadId,
+          downloadState: DownloadState.failed,
+          total: DownloadDTO.unknown,
+          prettyProgress: DownloadDTO.unknown,
+          chunksCount: DownloadDTO.unknown,
+          count: DownloadDTO.unknown,
+        ));
       });
     }
   }
@@ -140,12 +154,12 @@ class DownloadMan extends GetxService {
     _currentOperation = null;
     final cancel = _cancelTokens[downloadId];
     if (cancel?.isCancelled == false) {
+      _logger?.d('download cancelled id = $downloadId');
       cancel.cancel();
     }
     if (cancel != null) {
       _cancelTokens.remove(downloadId);
     }
-    _logger?.d('download cancelled id = $downloadId');
     await Future.delayed(const Duration(milliseconds: 500));
     return;
   }

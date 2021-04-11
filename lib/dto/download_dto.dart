@@ -7,7 +7,6 @@ enum DownloadState { unknown, queued, downloading, failed, completed, paused }
 @freezed
 abstract class DownloadDTO with _$DownloadDTO {
   const DownloadDTO._();
-
   const factory DownloadDTO(
       {@required String downloadId,
       @required int prettyProgress,
@@ -16,6 +15,7 @@ abstract class DownloadDTO with _$DownloadDTO {
       @required int chunksCount,
       @required DownloadState downloadState,
       Map<String, dynamic> customObject}) = _DownloadDTO;
+  static const unknown = -1;
 }
 
 extension DownloadStateExts on DownloadState {
@@ -24,6 +24,7 @@ extension DownloadStateExts on DownloadState {
   bool get isDownloading => this == DownloadState.downloading;
   bool get isQueued => this == DownloadState.queued;
   bool get isCompleted => this == DownloadState.completed;
+  bool get isFailed => this == DownloadState.failed;
 
   bool get isResumable =>
       this != DownloadState.queued &&
