@@ -39,9 +39,22 @@ class RangeDownload {
     int _chunksCount = 1;
     Future mergeTempFiles(chunk) async {
       try {
+        final dir = Directory(
+            '/data/user/0/com.msa.flutter_downloadman/app_flutter/testFile/');
+        final files = dir.listSync();
+        int totalSize = 0;
+        for (final file in files) {
+          final _f = File(file.path);
+          final l = await _f.length();
+          totalSize += l;
+          _logger?.i('file: ${file.path}:${Converter.formatBytes(l)}  ');
+        }
+        _logger
+            ?.i('final size :${Converter.formatBytes(totalSize)} file merged');
+        //
         final File f = File(savePath + 'temp0');
         final IOSink ioSink = f.openWrite(mode: FileMode.writeOnlyAppend);
-        int totalSize = 0;
+        totalSize = 0;
         totalSize += await f.length();
         for (int i = 1; i < chunk; ++i) {
           final File _f = File(savePath + 'temp$i');
@@ -113,21 +126,33 @@ class RangeDownload {
         --end;
         final File targetFile = File(path);
         if (await targetFile.exists() && isMerge) {
-          _logger?.d('RangeDownload good job start:$start'
-              ' length:${File(path).lengthSync()} id=$downloadId');
-          if (start + await targetFile.length() < end) {
+          final targetSize = await targetFile.length();
+          final startAndTargetSize = start + targetSize;
+          _logger?.d(
+              'chunk($no) resumed with size ${targetSize.toReadableValue()} + start ${start.toReadableValue()} ${startAndTargetSize.toReadableValue()} <= end ${end.toReadableValue()}');
+          if (startAndTargetSize < end) {
             initLength = await targetFile.length();
             start += initLength;
             final preFile = File(path + '_pre');
             if (await preFile.exists()) {
               initLength += await preFile.length();
               start += await preFile.length();
+              _logger?.d('chunk($no) merging pre to target file');
               await mergeFiles(targetFile.path, preFile.path, targetFile.path);
             } else {
+              _logger?.d(
+                  'chunk($no) target file renamed ${targetFile.path.lastIndexOf('/')} to ${preFile.path.lastIndexOf('/')}');
               await targetFile.rename(preFile.path);
             }
           } else {
-            await targetFile.delete();
+            ///chunk already downloaded
+            return Response(
+              statusCode: 200,
+              statusMessage: 'Download sucess.',
+              data: 'Download sucess.',
+            );
+            // await targetFile.delete();
+            // _logger?.d('chunk($no) target file deleted');
           }
         }
         _logger?.d('RangeDownload good job end:$start $initLength $end '
@@ -252,5 +277,11 @@ class RangeDownload {
     }
 
     return _completer.future;
+  }
+}
+
+extension IntExts on int {
+  String toReadableValue() {
+    return Converter.formatBytes(this);
   }
 }
