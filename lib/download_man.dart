@@ -15,7 +15,8 @@ class DownloadMan extends GetxService {
       _logger = Logger();
     }
     _streamListener
-        .throttleTime(const Duration(milliseconds: 500),
+        .distinct((d1, d2) => d1 == d2)
+        .throttleTime(const Duration(milliseconds: 200),
             leading: false, trailing: true)
         .listen((rawData) async {
       streamController.add(rawData);
