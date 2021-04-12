@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_downloadman/download_man.dart';
 import 'package:flutter_downloadman/dto/download_dto.dart';
+import 'package:flutter_downloadman/utils/converters.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -44,23 +45,23 @@ class _MyHomePageState extends State<MyHomePage> {
   final LinkedHashMap<String, DownloadDTO> downloads =
       LinkedHashMap<String, DownloadDTO>();
   final downloadData = <String, Map<String, String>>{
-    '1': {
-      'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
-          'Big_Buck_Bunny_1080_10s_30MB.mp4': '/1.mp4'
-    },
-    '2': {
-      'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
-          'Big_Buck_Bunny_1080_10s_30MB.mp4': '/2.mp4'
-    },
-    '3': {
-      'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
-          'Big_Buck_Bunny_1080_10s_30MB.mp4': '/3.mp4'
-    },
-    '4': {
-      'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
-          'Big_Buck_Bunny_1080_10s_30MB.mp4': '/4.mp4'
-    }
+    '1': {'https://speed.hetzner.de/100MB.bin': '/100.bin'},
+    // '2': {
+    //   'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
+    //       'Big_Buck_Bunny_1080_10s_30MB.mp4': '/2.mp4'
+    // },
+    // '3': {
+    //   'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
+    //       'Big_Buck_Bunny_1080_10s_30MB.mp4': '/3.mp4'
+    // },
+    // '4': {
+    //   'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
+    //       'Big_Buck_Bunny_1080_10s_30MB.mp4': '/4.mp4'
+    // }
   };
+  final Map<String, int> downloadSize = {};
+  final Map<String, String> paths = {};
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -79,12 +80,20 @@ class _MyHomePageState extends State<MyHomePage> {
             shrinkWrap: true,
             itemBuilder: (context, index) {
               final currentItem = downloads.values.elementAt(index);
+              if (currentItem.total > 0) {
+                downloadSize.putIfAbsent(
+                    currentItem.downloadId, () => currentItem.total);
+              }
+              if (currentItem.downloadState.isCompleted) {
+                _checkIfFileValid(currentItem);
+              }
               return ListTile(
                 key: Key(currentItem.downloadId),
                 title: Text('#${currentItem.downloadId}     '
                     // ignore: lines_longer_than_80_chars
                     '${currentItem.prettyProgress >= 0 ? '...${currentItem.prettyProgress}%' : ''}'),
-                subtitle: Text(currentItem.downloadState.toString()),
+                subtitle: Text('${currentItem.downloadState}'
+                    '${' | ${Converter.formatBytes(downloadSize[currentItem.downloadId])}'}'),
                 trailing: IconButton(
                   icon: Icon(currentItem.downloadState.isRunning
                       ? Icons.pause
@@ -148,8 +157,17 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _add(String key) async {
     final finalDir = await _createDir();
+    final filePath = finalDir.absolute.path + downloadData[key].values.first;
+    paths.putIfAbsent(key, () => filePath);
+    downloadMan.addToDownload(key, downloadData[key].keys.first, filePath);
+  }
 
-    downloadMan.addToDownload(key, downloadData[key].keys.first,
-        finalDir.absolute.path + downloadData[key].values.first);
+  void _checkIfFileValid(DownloadDTO currentItem) async {
+    final filePath = File(paths[currentItem.downloadId]);
+    final fileSize = await filePath.length();
+    final downloadCorrectSize = downloadSize[currentItem.downloadId];
+
+    debugPrint(
+        'SERVERSIZE ${Converter.formatBytes(downloadCorrectSize)}== $downloadCorrectSize, FileSize ${Converter.formatBytes(fileSize)}==$fileSize');
   }
 }
