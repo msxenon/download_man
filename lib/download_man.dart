@@ -10,7 +10,7 @@ import 'package:rxdart/rxdart.dart';
 import 'dto/download_dto.dart';
 
 class DownloadMan extends GetxService {
-  DownloadMan({this.dio, this.isLogEnabled = true}) {
+  DownloadMan({this.dio, this.isLogEnabled = true, this.connectionChecker}) {
     if (isLogEnabled) {
       _logger = Logger();
     }
@@ -22,6 +22,7 @@ class DownloadMan extends GetxService {
       streamController.add(rawData);
     });
   }
+  final ConnectionChecker connectionChecker;
   final _dio.Dio dio;
   final bool isLogEnabled;
   final _streamListener = BehaviorSubject<DownloadDTO>();
@@ -32,6 +33,11 @@ class DownloadMan extends GetxService {
   String _currentDownloadId;
 
   Logger _logger;
+
+  Future<bool> _connectionChecker() async {
+    return connectionChecker == null ? true : connectionChecker();
+  }
+
   void addToDownload(String downloadId, String url, String savePath) async {
     _streamListener.add(DownloadDTO(
       downloadId: downloadId,
@@ -51,9 +57,10 @@ class DownloadMan extends GetxService {
       String downloadId, String url, String savePath) {
     final _cancelToken =
         _cancelTokens.putIfAbsent(downloadId, () => _dio.CancelToken());
-    return RangeDownload(downloadId).downloadWithChunks(url, savePath,
-        cancelToken: _cancelToken, dio: dio, onReceiveProgress:
-            (downloadId, count, total, progress, chinksCount, downloadState) {
+    return RangeDownload(downloadId, connectionChecker: _connectionChecker)
+        .downloadWithChunks(url, savePath, cancelToken: _cancelToken, dio: dio,
+            onReceiveProgress: (downloadId, count, total, progress, chinksCount,
+                downloadState) {
       _streamListener.add(DownloadDTO(
           downloadId: downloadId,
           downloadState: downloadState,
@@ -133,7 +140,8 @@ class DownloadMan extends GetxService {
           _checkQueue();
         }
       }, onError: (error, stack) async {
-        _logger?.e('download cancelled id = $downloadId', error, stack);
+        _logger?.e('download error id = $downloadId', error, stack);
+        //todo implement retry
         await _refresh(downloadId);
 
         _streamListener.add(DownloadDTO(

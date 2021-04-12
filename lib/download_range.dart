@@ -10,17 +10,20 @@ import 'package:logger/logger.dart';
 
 typedef CustomProgressCallback = void Function(String downloadId, int count,
     int total, int progress, int chunksCount, DownloadState);
+typedef ConnectionChecker = Future<bool> Function();
 
 class RangeDownload {
-  RangeDownload(this.downloadId, {bool enableLogs = true}) {
+  RangeDownload(this.downloadId,
+      {bool enableLogs = true, this.connectionChecker}) {
     if (enableLogs) {
       _logger = Logger();
     }
   }
-
+  final ConnectionChecker connectionChecker;
   Logger _logger;
   final String downloadId;
   final _completer = Completer<Response>();
+
   Future<Response> downloadWithChunks(url, savePath,
       {bool isRangeDownload = true,
       CustomProgressCallback onReceiveProgress,
@@ -39,22 +42,9 @@ class RangeDownload {
     int _chunksCount = 1;
     Future mergeTempFiles(chunk) async {
       try {
-        final dir = Directory(
-            '/data/user/0/com.msa.flutter_downloadman/app_flutter/testFile/');
-        final files = dir.listSync();
-        int totalSize = 0;
-        for (final file in files) {
-          final _f = File(file.path);
-          final l = await _f.length();
-          totalSize += l;
-          _logger?.i('file: ${file.path}:${Converter.formatBytes(l)}  ');
-        }
-        _logger
-            ?.i('final size :${Converter.formatBytes(totalSize)} file merged');
-        //
         final File f = File(savePath + 'temp0');
         final IOSink ioSink = f.openWrite(mode: FileMode.writeOnlyAppend);
-        totalSize = 0;
+        int totalSize = 0;
         totalSize += await f.length();
         for (int i = 1; i < chunk; ++i) {
           final File _f = File(savePath + 'temp$i');
@@ -70,6 +60,7 @@ class RangeDownload {
         _logger?.i('$chunk:${Converter.formatBytes(totalSize)} file merged');
       } catch (e, s) {
         _logger?.e('mergeTempFiles id=$downloadId', e, s);
+        rethrow;
       }
     }
 
@@ -101,14 +92,13 @@ class RangeDownload {
           }
         }
         progress[no] = progressInit[no] + received;
+
         if (onReceiveProgress != null && total != 0) {
           final count = progress.values.reduce((a, b) => a + b);
           final int prettyProgress = (count / total * 100).floor();
-
-          if (prettyProgress > 100) {
-            _logger?.w(
-                'more than 100 $downloadId ==== ${prettyProgress} = $count / $total ${progress}');
-          }
+          // _logger?.d('progress = $progress');
+          // _logger?.d('progressInt = $progressInit');
+          // _logger?.d('prettyProgress = $prettyProgress');
           onReceiveProgress(downloadId, count, total, prettyProgress,
               _chunksCount, DownloadState.downloading);
         }
@@ -129,7 +119,10 @@ class RangeDownload {
           final targetSize = await targetFile.length();
           final startAndTargetSize = start + targetSize;
           _logger?.d(
-              'chunk($no) resumed with size ${targetSize.toReadableValue()} + start ${start.toReadableValue()} ${startAndTargetSize.toReadableValue()} <= end ${end.toReadableValue()}');
+              'chunk($no) resumed with size ${targetSize.toReadableValue()} '
+              '+ start ${start.toReadableValue()} '
+              '${startAndTargetSize.toReadableValue()} '
+              '<= end ${end.toReadableValue()}');
           if (startAndTargetSize < end) {
             initLength = await targetFile.length();
             start += initLength;
@@ -140,8 +133,8 @@ class RangeDownload {
               _logger?.d('chunk($no) merging pre to target file');
               await mergeFiles(preFile.path, targetFile.path, preFile.path);
             } else {
-              _logger?.d(
-                  'chunk($no) target file renamed ${targetFile.path.lastIndexOf('/')} to ${preFile.path}');
+              _logger?.d('chunk($no) target file renamed '
+                  '${targetFile.path.lastIndexOf('/')} to ${preFile.path}');
               await targetFile.rename(preFile.path);
             }
           } else {
@@ -183,6 +176,9 @@ class RangeDownload {
           data: 'Download sucess.',
         ));
         return _completer.future;
+      }
+      if (!await connectionChecker()) {
+        throw DioError(type: DioErrorType.CANCEL, error: 'No Connection');
       }
       if (isRangeDownload) {
         final response = await downloadChunk(url, 0, 1, -1, isMerge: false);
