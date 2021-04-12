@@ -92,7 +92,7 @@ class RangeDownload {
 
     void createCallback(int received, rangeTotal, int no) async {
       try {
-        if (received >= rangeTotal) {
+        if (no >= 0 && received >= rangeTotal) {
           final path = savePath + 'temp$no';
           final oldPath = savePath + 'temp${no}_pre';
           final File oldFile = File(oldPath);
@@ -138,21 +138,21 @@ class RangeDownload {
               initLength += await preFile.length();
               start += await preFile.length();
               _logger?.d('chunk($no) merging pre to target file');
-              await mergeFiles(targetFile.path, preFile.path, targetFile.path);
+              await mergeFiles(preFile.path, targetFile.path, preFile.path);
             } else {
               _logger?.d(
-                  'chunk($no) target file renamed ${targetFile.path.lastIndexOf('/')} to ${preFile.path.lastIndexOf('/')}');
+                  'chunk($no) target file renamed ${targetFile.path.lastIndexOf('/')} to ${preFile.path}');
               await targetFile.rename(preFile.path);
             }
           } else {
             ///chunk already downloaded
+            progress[no] = (initLength);
+            progressInit[no] = (initLength);
             return Response(
               statusCode: 200,
               statusMessage: 'Download sucess.',
               data: 'Download sucess.',
             );
-            // await targetFile.delete();
-            // _logger?.d('chunk($no) target file deleted');
           }
         }
         _logger?.d('RangeDownload good job end:$start $initLength $end '
@@ -185,7 +185,7 @@ class RangeDownload {
         return _completer.future;
       }
       if (isRangeDownload) {
-        final response = await downloadChunk(url, 0, 1, 0, isMerge: false);
+        final response = await downloadChunk(url, 0, 1, -1, isMerge: false);
         try {
           await File(savePath + '__').delete();
         } catch (e, s) {
@@ -200,18 +200,15 @@ class RangeDownload {
                 .value(HttpHeaders.contentRangeHeader)
                 .split('/')
                 .last);
-            final int reserved = total -
-                int.parse(
-                    response.headers.value(HttpHeaders.contentLengthHeader));
+
             _chunksCount = total > _singleChunkSize
-                ? min(max((reserved / _singleChunkSize).floor(), 1),
-                    maxChunksCount)
+                ? min(
+                    maxChunksCount, max((total / _singleChunkSize).floor(), 1))
                 : 1;
-            final int chunkSize = reserved ~/ _chunksCount;
+            final int chunkSize = total ~/ _chunksCount;
             final futures = <Future>[];
-            _logger
-                ?.d('totalSize id=$downloadId $reserved chunkSize $chunkSize '
-                    '$_chunksCount');
+            _logger?.d('totalSize id=$downloadId $total chunkSize $chunkSize '
+                '$_chunksCount');
 
             for (var chunkNo = 0; chunkNo < _chunksCount; chunkNo++) {
               final int start = chunkSize * chunkNo;
@@ -234,7 +231,11 @@ class RangeDownload {
               data: 'Download sucess.',
             ));
           } catch (e, s) {
-            _logger?.e('mainRangeDownload id=$downloadId', e, s);
+            if (e is DioError && e.type == DioErrorType.CANCEL) {
+              ///dont log anything .. user just paused the download process
+            } else {
+              _logger?.e('mainRangeDownload id=$downloadId', e, s);
+            }
             _completer.completeError(e, s);
           }
         } else if (response.statusCode == 200) {
