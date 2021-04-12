@@ -15,7 +15,8 @@ class DownloadMan extends GetxService {
       _logger = Logger();
     }
     _streamListener
-        .throttleTime(const Duration(milliseconds: 500),
+        .distinct((d1, d2) => d1 == d2)
+        .throttleTime(const Duration(milliseconds: 200),
             leading: false, trailing: true)
         .listen((rawData) async {
       streamController.add(rawData);
@@ -112,8 +113,6 @@ class DownloadMan extends GetxService {
       _currentDownloadId = downloadId;
       _currentOperation =
           CancelableOperation.fromFuture(value.call(), onCancel: () async {
-        _logger?.e('download cancelled #1 id = $downloadId');
-
         await _refresh(downloadId);
         _streamListener.add(DownloadDTO(
           downloadId: downloadId,
@@ -154,7 +153,6 @@ class DownloadMan extends GetxService {
     _currentOperation = null;
     final cancel = _cancelTokens[downloadId];
     if (cancel?.isCancelled == false) {
-      _logger?.d('download cancelled id = $downloadId');
       cancel.cancel();
     }
     if (cancel != null) {

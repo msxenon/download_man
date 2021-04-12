@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -42,26 +41,14 @@ class _MyHomePageState extends State<MyHomePage> {
     _createListDownloads();
   }
 
-  final LinkedHashMap<String, DownloadDTO> downloads =
-      LinkedHashMap<String, DownloadDTO>();
+  ///this package downloads single file per time
   final downloadData = <String, Map<String, String>>{
-    '1': {'https://speed.hetzner.de/100MB.bin': '/100.bin'},
-    // '2': {
-    //   'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
-    //       'Big_Buck_Bunny_1080_10s_30MB.mp4': '/2.mp4'
-    // },
-    // '3': {
-    //   'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
-    //       'Big_Buck_Bunny_1080_10s_30MB.mp4': '/3.mp4'
-    // },
-    // '4': {
-    //   'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/'
-    //       'Big_Buck_Bunny_1080_10s_30MB.mp4': '/4.mp4'
-    // }
+    '2': {
+      'https://alcorn.com/wp-content/downloads/test-files/AlcornSpinningProductsHD.mpg':
+          '/AlcornSpinningProductsHD.mpg'
+    },
   };
-  final Map<String, int> downloadSize = {};
-  final Map<String, String> paths = {};
-
+  DownloadDTO _downloadDTO;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -70,64 +57,59 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          if (downloads.isEmpty)
-            Text(
-              'No downloads yet',
-              style: Theme.of(context).textTheme.headline4,
+          if (_downloadDTO == null)
+            Center(
+              child: Text(
+                'No downloads yet',
+                style: Theme.of(context).textTheme.headline4,
+              ),
             ),
-          ListView.builder(
-            shrinkWrap: true,
-            itemBuilder: (context, index) {
-              final currentItem = downloads.values.elementAt(index);
-              if (currentItem.total > 0) {
-                downloadSize.putIfAbsent(
-                    currentItem.downloadId, () => currentItem.total);
-              }
-              if (currentItem.downloadState.isCompleted) {
-                _checkIfFileValid(currentItem);
-              }
-              return ListTile(
-                key: Key(currentItem.downloadId),
-                title: Text('#${currentItem.downloadId}     '
-                    // ignore: lines_longer_than_80_chars
-                    '${currentItem.prettyProgress >= 0 ? '...${currentItem.prettyProgress}%' : ''}'),
-                subtitle: Text('${currentItem.downloadState}'
-                    '${' | ${Converter.formatBytes(downloadSize[currentItem.downloadId])}'}'),
-                trailing: IconButton(
-                  icon: Icon(currentItem.downloadState.isRunning
-                      ? Icons.pause
-                      : currentItem.downloadState.isCompleted
-                          ? Icons.download_done_outlined
-                          : Icons.play_arrow_rounded),
-                  onPressed: () {
-                    if (currentItem.downloadState.isRunning) {
-                      downloadMan.pause(currentItem.downloadId);
-                    } else if (currentItem.downloadState.isResumable) {
-                      _add(currentItem.downloadId);
-                    }
-                  },
-                ),
-              );
-            },
-            itemCount: downloads.length,
-          ),
+          if (_downloadDTO != null)
+            ListView.builder(
+              shrinkWrap: true,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  key: Key(_downloadDTO.downloadId),
+                  title: Text('#${_downloadDTO.downloadId}     '
+                      // ignore: lines_longer_than_80_chars
+                      '${_downloadDTO.prettyProgress >= 0 ? '...${_downloadDTO.prettyProgress}%' : ''}'),
+                  subtitle: Text('${_downloadDTO.downloadState}'
+                      '${' || '
+                          ' ${Converter.formatBytes(_downloadDTO.count)}/'
+                          '${Converter.formatBytes(_downloadDTO.total)}'}'),
+                  trailing: IconButton(
+                    icon: Icon(_downloadDTO.downloadState.isDownloading
+                        ? Icons.pause
+                        : _downloadDTO.downloadState.isCompleted
+                            ? Icons.download_done_outlined
+                            : Icons.play_arrow_rounded),
+                    onPressed: () {
+                      if (_downloadDTO.downloadState.isRunning) {
+                        downloadMan.pause(_downloadDTO.downloadId);
+                      } else if (_downloadDTO.downloadState.isResumable) {
+                        _add(_downloadDTO.downloadId);
+                      }
+                    },
+                  ),
+                );
+              },
+              itemCount: 1,
+            ),
           const SizedBox(
             height: 20,
           ),
           OutlineButton(
               child: const Text('Start Downloading'),
-              onPressed: downloads.isNotEmpty
+              onPressed: _downloadDTO != null
                   ? null
                   : () {
-                      // _add('1');
-                      downloadData.forEach((key, value) {
-                        _add(key);
-                      });
+                      _add(downloadData.keys.first);
                     }),
           OutlineButton(
-              child: const Text('Pause All'),
-              onPressed: downloads.isEmpty ? null : downloadMan.pauseAll),
+              child: const Text('Pause'),
+              onPressed: downloadData == null ? null : downloadMan.pauseAll),
         ],
       ),
     );
@@ -147,8 +129,7 @@ class _MyHomePageState extends State<MyHomePage> {
     downloadMan.streamController.stream.listen((event) {
       debugPrint('_createListDownloads $event');
 
-      downloads.update(event.downloadId, (value) => event,
-          ifAbsent: () => event);
+      _setDownloadEvent(event);
       if (mounted) {
         setState(() {});
       }
@@ -158,16 +139,33 @@ class _MyHomePageState extends State<MyHomePage> {
   void _add(String key) async {
     final finalDir = await _createDir();
     final filePath = finalDir.absolute.path + downloadData[key].values.first;
-    paths.putIfAbsent(key, () => filePath);
     downloadMan.addToDownload(key, downloadData[key].keys.first, filePath);
   }
 
-  void _checkIfFileValid(DownloadDTO currentItem) async {
-    final filePath = File(paths[currentItem.downloadId]);
-    final fileSize = await filePath.length();
-    final downloadCorrectSize = downloadSize[currentItem.downloadId];
+  ///lets pretend we are persisting DownloadDTO to a local database
+  void _setDownloadEvent(DownloadDTO event) {
+    _downloadDTO ??= event;
+    _downloadDTO = _downloadDTO.copyWith(downloadState: event.downloadState);
+    if (isValidValue(event.prettyProgress)) {
+      _downloadDTO =
+          _downloadDTO.copyWith(prettyProgress: event.prettyProgress);
+    }
+    if (isValidValue(event.total)) {
+      _downloadDTO = _downloadDTO.copyWith(total: event.total);
+    }
+    if (isValidValue(event.count)) {
+      _downloadDTO = _downloadDTO.copyWith(count: event.count);
+    }
+    if (isValidValue(event.chunksCount)) {
+      _downloadDTO = _downloadDTO.copyWith(chunksCount: event.chunksCount);
+    }
+    if (isValidValue(event.prettyProgress)) {
+      _downloadDTO =
+          _downloadDTO.copyWith(prettyProgress: event.prettyProgress);
+    }
+  }
 
-    debugPrint(
-        'SERVERSIZE ${Converter.formatBytes(downloadCorrectSize)}== $downloadCorrectSize, FileSize ${Converter.formatBytes(fileSize)}==$fileSize');
+  bool isValidValue(int value) {
+    return value != DownloadDTO.unknown;
   }
 }
