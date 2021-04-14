@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:async/async.dart';
 import 'package:dio/dio.dart' as _dio;
-import 'package:flutter_downloadman/download_range.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 import 'package:rxdart/rxdart.dart';
 
+import 'download_range.dart';
 import 'dto/download_dto.dart';
 
 class DownloadMan extends GetxService {
