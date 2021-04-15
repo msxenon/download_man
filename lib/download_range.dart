@@ -1,12 +1,15 @@
 //ignore_for_file:avoid_print, prefer_interpolation_to_compose_strings
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:flutter_downloadman/dto/download_dto.dart';
 import 'package:flutter_downloadman/utils/converters.dart';
 import 'package:logger/logger.dart';
+
+import 'dto/download_dto.dart';
+import 'file_manager.dart';
 
 typedef CustomProgressCallback = void Function(String downloadId, int count,
     int total, int progress, int chunksCount, DownloadState);
@@ -19,6 +22,11 @@ class RangeDownload {
       _logger = Logger();
     }
   }
+
+  ///[fileManager] control all writing and merge files operations
+  //TODO Test the merger again, i think maybe we will face other issues with
+  //many play/pause and connection interrupt
+  FileManager fileManager = FileManager();
   final ConnectionChecker connectionChecker;
   Logger _logger;
   final String downloadId;
@@ -31,7 +39,7 @@ class RangeDownload {
       CancelToken cancelToken,
       int maxChunksCount = 16}) async {
     _logger?.d('RangeDownload Started id=$downloadId ');
-    const _singleChunkSize = 10485760;
+    const _singleChunkSize = 2097152;
     int total = 0;
     if (dio == null) {
       dio = Dio();
@@ -40,46 +48,6 @@ class RangeDownload {
     final progress = <int, int>{};
     final progressInit = <int, int>{};
     int _chunksCount = 1;
-    Future mergeTempFiles(chunk) async {
-      try {
-        final File f = File(savePath + 'temp0');
-        final IOSink ioSink = f.openWrite(mode: FileMode.writeOnlyAppend);
-        int totalSize = 0;
-        totalSize += await f.length();
-        for (int i = 1; i < chunk; ++i) {
-          final File _f = File(savePath + 'temp$i');
-          final _fl = await _f.length();
-          totalSize += _fl;
-          await ioSink.addStream(_f.openRead());
-          _logger?.i(
-              'index $i: ${_f.path} : ${Converter.formatBytes(_fl)} merged');
-          await _f.delete();
-        }
-        await ioSink.close();
-        await f.rename(savePath);
-        _logger?.i('$chunk:${Converter.formatBytes(totalSize)} file merged');
-      } catch (e, s) {
-        _logger?.e('mergeTempFiles id=$downloadId', e, s);
-        rethrow;
-      }
-    }
-
-    ///appends f2 to f1
-    ///deletes f2
-    ///rename f1 to targetfile name
-    Future mergeFiles(file1, file2, targetFile) async {
-      try {
-        final File f1 = File(file1);
-        final File f2 = File(file2);
-        final IOSink ioSink = f1.openWrite(mode: FileMode.writeOnlyAppend);
-        await ioSink.addStream(f2.openRead());
-        await f2.delete();
-        await ioSink.close();
-        await f1.rename(targetFile);
-      } catch (e, s) {
-        _logger?.e('mergeFiles id=$downloadId ', e, s);
-      }
-    }
 
     void createCallback(int received, rangeTotal, int no) async {
       try {
@@ -88,7 +56,7 @@ class RangeDownload {
           final oldPath = savePath + 'temp${no}_pre';
           final File oldFile = File(oldPath);
           if (oldFile.existsSync()) {
-            await mergeFiles(path, oldPath, path);
+            await fileManager.mergeFiles(oldPath, path, path);
           }
         }
         progress[no] = progressInit[no] + received;
@@ -96,9 +64,6 @@ class RangeDownload {
         if (onReceiveProgress != null && total != 0) {
           final count = progress.values.reduce((a, b) => a + b);
           final int prettyProgress = (count / total * 100).floor();
-          // _logger?.d('progress = $progress');
-          // _logger?.d('progressInt = $progressInit');
-          // _logger?.d('prettyProgress = $prettyProgress');
           onReceiveProgress(downloadId, count, total, prettyProgress,
               _chunksCount, DownloadState.downloading);
         }
@@ -113,7 +78,10 @@ class RangeDownload {
 
       if (isMerge) {
         int initLength = 0;
+        // this is because the second start exactly after the end
+        // of the first, so one byte is always duplicated
         --end;
+
         final File targetFile = File(path);
         if (await targetFile.exists() && isMerge) {
           final targetSize = await targetFile.length();
@@ -131,7 +99,8 @@ class RangeDownload {
               initLength += await preFile.length();
               start += await preFile.length();
               _logger?.d('chunk($no) merging pre to target file');
-              await mergeFiles(preFile.path, targetFile.path, preFile.path);
+              await fileManager.mergeFiles(
+                  preFile.path, targetFile.path, preFile.path);
             } else {
               _logger?.d('chunk($no) target file renamed '
                   '${targetFile.path.lastIndexOf('/')} to ${preFile.path}');
@@ -167,9 +136,11 @@ class RangeDownload {
     }
 
     try {
-      if (await File(savePath).exists()) {
-        onReceiveProgress(
-            downloadId, 1, 1, 100, _chunksCount, DownloadState.completed);
+      final file = File(savePath);
+      if (await file.exists()) {
+        final fileSize = await file.length();
+        onReceiveProgress(downloadId, fileSize, fileSize, 100, _chunksCount,
+            DownloadState.completed);
         _completer.complete(Response(
           statusCode: 200,
           statusMessage: 'Download sucess.',
@@ -178,6 +149,7 @@ class RangeDownload {
         return _completer.future;
       }
       if (!await connectionChecker()) {
+        //TODO after update please change it to cancel not CANCEL
         throw DioError(type: DioErrorType.CANCEL, error: 'No Connection');
       }
       if (isRangeDownload) {
@@ -197,10 +169,8 @@ class RangeDownload {
                 .split('/')
                 .last);
 
-            _chunksCount = total > _singleChunkSize
-                ? min(
-                    maxChunksCount, max((total / _singleChunkSize).floor(), 1))
-                : 1;
+            _chunksCount =
+                min(maxChunksCount, max((total / _singleChunkSize).floor(), 1));
             final int chunkSize = total ~/ _chunksCount;
             final futures = <Future>[];
             _logger?.d('totalSize id=$downloadId $total chunkSize $chunkSize '
@@ -213,13 +183,9 @@ class RangeDownload {
               futures.add(downloadChunk(url, start, end, chunkNo));
             }
             await Future.wait(futures);
-            await mergeTempFiles(_chunksCount);
-            onReceiveProgress(
-                downloadId,
-                DownloadDTO.unknown,
-                DownloadDTO.unknown,
-                100,
-                _chunksCount,
+            await fileManager.mergeTempFiles(_chunksCount, savePath);
+            final fileSize = await fileManager.getFileSize(savePath);
+            onReceiveProgress(downloadId, fileSize, fileSize, 100, _chunksCount,
                 DownloadState.completed);
             _completer.complete(Response(
               statusCode: 200,

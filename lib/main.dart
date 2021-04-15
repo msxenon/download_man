@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_downloadman/download_man.dart';
-import 'package:flutter_downloadman/dto/download_dto.dart';
 import 'package:flutter_downloadman/utils/converters.dart';
 import 'package:get/get.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'download_man.dart';
+import 'dto/download_dto.dart';
+import 'file_manager.dart';
 
 void main() async {
   runApp(MyApp());
@@ -29,26 +28,30 @@ class MyApp extends StatelessWidget {
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key key, this.title}) : super(key: key);
   final String title;
+
   @override
   _MyHomePageState createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
   final downloadMan = Get.put(DownloadMan());
+
   @override
   void initState() {
     super.initState();
+    FileManager.createDir(deleteContent: true);
     _createListDownloads();
   }
 
   ///this package downloads single file per time
   final downloadData = <String, Map<String, String>>{
     '2': {
-      'https://alcorn.com/wp-content/downloads/test-files/AlcornSpinningProductsHD.mpg':
-          '/AlcornSpinningProductsHD.mpg'
+      'https://hot.v.cntv.cn/flash/mp4video19/TMS/2012/03/07/8606abe1a3984a978525a17919daf362_h264418000nero_aac32-2.mp4':
+          '/h264418000nero_.mp4'
     },
   };
   DownloadDTO _downloadDTO;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -115,30 +118,24 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Future<Directory> _createDir() async {
-    final docDir = (await getApplicationDocumentsDirectory()).path;
-    final finalDirPath = '$docDir/testFile';
-    final _directory = Directory(finalDirPath);
-    if (!_directory.existsSync()) {
-      _directory.createSync();
-    }
-    return _directory;
-  }
-
   void _createListDownloads() async {
     downloadMan.streamController.stream.listen((event) {
       debugPrint('_createListDownloads $event');
 
       _setDownloadEvent(event);
+      if (event.downloadState == DownloadState.completed) {
+        debugFileSize(event);
+      }
       if (mounted) {
         setState(() {});
       }
     });
   }
 
+  String finalDir;
   void _add(String key) async {
-    final finalDir = await _createDir();
-    final filePath = finalDir.absolute.path + downloadData[key].values.first;
+    finalDir = await FileManager.createDir();
+    final filePath = finalDir + downloadData[key].values.first;
     downloadMan.addToDownload(key, downloadData[key].keys.first, filePath);
   }
 
@@ -167,5 +164,30 @@ class _MyHomePageState extends State<MyHomePage> {
 
   bool isValidValue(int value) {
     return value != DownloadDTO.unknown;
+  }
+
+  void debugFileSize(DownloadDTO event) async {
+    final fileSizeDownloadMan = event.total;
+    final filePath = finalDir + downloadData[event.downloadId].values.first;
+
+    final localFileSize = await FileManager().getFileSize(filePath);
+
+    debugPrint('File Has been downloaded!!');
+
+    // ignore: lines_longer_than_80_chars
+    debugPrint(
+        'DownloadManFileSize:$fileSizeDownloadMan(${Converter.formatBytes(fileSizeDownloadMan)})');
+
+    // ignore: lines_longer_than_80_chars
+    debugPrint(
+        'LocalFileSize:$localFileSize(${Converter.formatBytes(localFileSize)})');
+
+    if (fileSizeDownloadMan > localFileSize) {
+      debugPrint('fileSizeDownloadMan is larger localFileSize ');
+    } else if (fileSizeDownloadMan < localFileSize) {
+      debugPrint('localFileSize is larger fileSizeDownloadMan ');
+    } else {
+      debugPrint('Files size are equal');
+    }
   }
 }
