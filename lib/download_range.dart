@@ -17,7 +17,9 @@ typedef ConnectionChecker = Future<bool> Function();
 
 class RangeDownload {
   RangeDownload(this.downloadId,
-      {bool enableLogs = true, this.connectionChecker}) {
+      {bool enableLogs = true,
+      this.connectionChecker,
+      this.deleteOnError = true}) {
     if (enableLogs) {
       _logger = Logger();
     }
@@ -31,7 +33,7 @@ class RangeDownload {
   Logger _logger;
   final String downloadId;
   final _completer = Completer<Response>();
-
+  final bool deleteOnError;
   Future<Response> downloadWithChunks(url, savePath,
       {bool isRangeDownload = true,
       CustomProgressCallback onReceiveProgress,
@@ -130,7 +132,7 @@ class RangeDownload {
         options: Options(
           headers: {'range': 'bytes=$start-$end'},
         ),
-        deleteOnError: false,
+        deleteOnError: deleteOnError,
         cancelToken: cancelToken,
       );
     }

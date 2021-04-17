@@ -10,7 +10,12 @@ import 'package:rxdart/rxdart.dart';
 import 'dto/download_dto.dart';
 
 class DownloadMan extends GetxService {
-  DownloadMan({this.dio, this.isLogEnabled = true, this.connectionChecker}) {
+  DownloadMan(
+      {this.dio,
+      this.isLogEnabled = true,
+      this.connectionChecker,
+      this.maxChunkCount = 16,
+      this.deleteOnError = true}) {
     if (isLogEnabled) {
       _logger = Logger();
     }
@@ -25,10 +30,12 @@ class DownloadMan extends GetxService {
   final ConnectionChecker connectionChecker;
   final _dio.Dio dio;
   final bool isLogEnabled;
+  final int maxChunkCount;
   final _streamListener = BehaviorSubject<DownloadDTO>();
   final streamController = StreamController<DownloadDTO>();
   final Map<String, Future Function()> waitingList = {};
   final Map<String, _dio.CancelToken> _cancelTokens = {};
+  final bool deleteOnError;
   CancelableOperation _currentOperation;
   String _currentDownloadId;
 
@@ -57,10 +64,13 @@ class DownloadMan extends GetxService {
       String downloadId, String url, String savePath) {
     final _cancelToken =
         _cancelTokens.putIfAbsent(downloadId, () => _dio.CancelToken());
-    return RangeDownload(downloadId, connectionChecker: _connectionChecker)
-        .downloadWithChunks(url, savePath, cancelToken: _cancelToken, dio: dio,
-            onReceiveProgress: (downloadId, count, total, progress, chinksCount,
-                downloadState) {
+    return RangeDownload(downloadId,
+            connectionChecker: _connectionChecker, deleteOnError: deleteOnError)
+        .downloadWithChunks(url, savePath,
+            cancelToken: _cancelToken,
+            dio: dio,
+            maxChunksCount: maxChunkCount, onReceiveProgress: (downloadId,
+                count, total, progress, chinksCount, downloadState) {
       _streamListener.add(DownloadDTO(
           downloadId: downloadId,
           downloadState: downloadState,
