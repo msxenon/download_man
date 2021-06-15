@@ -1,3 +1,5 @@
+[This repository is no longer maintained, code still needs to be cleaned well, adding Unit tests ... etc]
+
 # Big files downloader (in Pure dart)
 ![](files/screenshot.png)
 ## Tested on Android & iOS and should work on all platforms
